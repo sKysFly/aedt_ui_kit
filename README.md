@@ -1,6 +1,6 @@
 # aedt_ui_kit
 
-Identité visuelle commune des toolkits AEDT (`aedt_tdr`, `aedt_eye`, `aedt_port_checker`) : thème sombre PyQt6, widgets réutilisables, polices IBM Plex embarquées.
+Identité visuelle commune des toolkits AEDT (`aedt_tdr`, `aedt_eye`, `aedt_crosstalk`, `aedt_port_checker`) : thème sombre PyQt6, widgets réutilisables, polices IBM Plex embarquées.
 
 ![Thème Nuit](docs/demo_dark.png)
 ![Thème Jour](docs/demo_light.png)
@@ -73,6 +73,15 @@ Dans le code de l'application :
 - `ui.mono_font(size)` pour les axes pyqtgraph et les valeurs.
 - Propriétés Qt reconnues par la feuille de style : `setProperty("primary", True)` sur un bouton, `setProperty("role", "hint" | "caption" | "conv")` sur un `QLabel`. Après un changement dynamique, appeler `ui.restyle(widget)`.
 - Noms d'objet : `TopBar`, `SidePanel`, `Panel`.
+
+## Propagation aux toolkits
+
+Chaque toolkit embarque une copie de `ui_kit/` (jamais modifiée sur place). Après une modification ici :
+
+```bash
+python tools/sync_ui_kit.py          # copie vers les toolkits voisins
+python tools/sync_ui_kit.py --check  # signale les copies qui ont dérivé (code retour 1)
+```
 
 ## Démonstration
 
