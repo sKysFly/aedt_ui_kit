@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aedt-ui-kit"
+version = "0.1.0"
+description = "Identité visuelle commune des toolkits AEDT (thème sombre PyQt6, widgets, polices IBM Plex)"
+requires-python = ">=3.9"
+dependencies = ["PyQt6>=6.5"]
+
+[project.optional-dependencies]
+plot = ["pyqtgraph>=0.13"]
+
+[tool.setuptools]
+packages = ["ui_kit"]
+
+[tool.setuptools.package-data]
+ui_kit = ["fonts/*.ttf", "fonts/OFL.txt"]
