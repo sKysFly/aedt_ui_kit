@@ -6,6 +6,10 @@ Colour roles are kept separate:
 - data: `ch1`..`ch4`, oscilloscope channel colours (CH1 yellow, CH2 cyan, CH3 magenta, CH4 green)
 - status: `pass`, `warn`, `fail`
 Neutrals are slightly blue-biased greys. Numbers use IBM Plex Mono with tabular figures.
+
+Two palettes, `dark` (night) and `light` (day). `TOKENS` is mutated in place by `set_theme()`, so code that
+reads `ui.TOKENS[...]` at paint time follows the active theme; widgets that bake colours into a stylesheet
+must be refreshed after a switch (see `Pill.refresh`, `KpiTile.refresh`).
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ import os
 
 from PyQt6 import QtGui, QtWidgets
 
-TOKENS = {
+DARK = {
     "bg": "#0F1216",
     "s1": "#161A20",
     "s2": "#1D222A",
@@ -32,13 +36,55 @@ TOKENS = {
     "warn": "#D29922",
     "fail": "#F85149",
     "cursor": "#C9D1D9",
+    "hover": "rgba(255, 255, 255, 0.04)",
+    "sel": "rgba(91, 141, 239, 0.18)",
 }
+
+# Light data colours are darkened so that traces keep a contrast of at least 3:1 on the light background.
+LIGHT = {
+    "bg": "#F4F6F9",
+    "s1": "#FFFFFF",
+    "s2": "#E9EDF2",
+    "line": "#D3D9E1",
+    "fg": "#161A20",
+    "dim": "#566170",
+    "accent": "#2F63C8",
+    "accent_hover": "#2556B0",
+    "on_accent": "#FFFFFF",
+    "ch1": "#B07F00",
+    "ch2": "#0B8CA6",
+    "ch3": "#A33FA6",
+    "ch4": "#2A8A3C",
+    "pass": "#1A7F37",
+    "warn": "#9A6200",
+    "fail": "#C4312B",
+    "cursor": "#3B4350",
+    "hover": "rgba(0, 0, 0, 0.04)",
+    "sel": "rgba(47, 99, 200, 0.14)",
+}
+
+THEMES = {"dark": DARK, "light": LIGHT}
+TOKENS = dict(DARK)
+_state = {"theme": "dark", "fonts": False}
 
 CHANNELS = ("ch1", "ch2", "ch3", "ch4")
 
 SANS = "IBM Plex Sans"
 MONO = "IBM Plex Mono"
 _FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
+
+def current_theme() -> str:
+    return _state["theme"]
+
+
+def set_theme(name: str) -> None:
+    """Switch the active palette in place. Call `apply(app)` afterwards to restyle the application."""
+    if name not in THEMES:
+        raise ValueError(f"thème inconnu : {name!r} (attendu : {', '.join(THEMES)})")
+    _state["theme"] = name
+    TOKENS.clear()
+    TOKENS.update(THEMES[name])
 
 
 def color(name: str, alpha: int = 255) -> QtGui.QColor:
@@ -53,8 +99,9 @@ def status_token(verdict: str) -> str:
 
 def load_fonts() -> None:
     """Register the bundled Plex faces; Qt falls back to the system sans/mono if they are missing."""
-    if not os.path.isdir(_FONT_DIR):
+    if _state["fonts"] or not os.path.isdir(_FONT_DIR):
         return
+    _state["fonts"] = True
     for fname in sorted(os.listdir(_FONT_DIR)):
         if fname.lower().endswith(".ttf"):
             QtGui.QFontDatabase.addApplicationFont(os.path.join(_FONT_DIR, fname))
@@ -77,6 +124,7 @@ QToolTip {{ background: {s2}; color: {fg}; border: 1px solid {line}; padding: 4p
 QFrame#Panel, QWidget#Panel {{ background: {s1}; }}
 QFrame#TopBar {{ background: {s1}; border-bottom: 1px solid {line}; }}
 QFrame#SidePanel {{ background: {s1}; border-right: 1px solid {line}; }}
+QFrame#KpiStrip {{ background: {bg}; border-bottom: 1px solid {line}; }}
 QFrame#VSep {{ background: {line}; max-width: 1px; min-width: 1px; }}
 QLabel {{ background: transparent; }}
 QLabel[role="caption"] {{
@@ -99,7 +147,7 @@ QPushButton[primary="true"]:hover {{ background: {accent_hover}; }}
 QToolButton::menu-indicator {{ image: none; width: 0; }}
 
 QToolButton[seg="true"] {{
-    font-family: "{mono}"; color: {dim}; border-radius: 0; border-right-width: 0; padding: 5px 10px;
+    font-family: "{mono}"; color: {dim}; border-radius: 0; border-right-width: 0; padding: 5px 8px;
 }}
 QToolButton[seg="true"][first="true"] {{ border-top-left-radius: 4px; border-bottom-left-radius: 4px; }}
 QToolButton[seg="true"][last="true"] {{
@@ -128,11 +176,11 @@ QMenu::separator {{ height: 1px; background: {line}; margin: 4px 6px; }}
 QListWidget {{ background: transparent; border: none; outline: none; }}
 QListWidget::item {{ border: 1px solid transparent; border-radius: 4px; }}
 QListWidget::item:selected {{ background: {s2}; border-color: {line}; }}
-QListWidget::item:hover:!selected {{ background: rgba(255, 255, 255, 0.03); }}
+QListWidget::item:hover:!selected {{ background: {hover}; }}
 
 QTableWidget {{
     background: {bg}; border: none; gridline-color: {line}; font-family: "{mono}"; font-size: 12px;
-    selection-background-color: rgba(91, 141, 239, 0.18); selection-color: {fg};
+    selection-background-color: {sel}; selection-color: {fg};
 }}
 QHeaderView::section {{
     background: {s1}; color: {dim}; border: none; border-bottom: 1px solid {line}; padding: 6px 10px;
@@ -161,8 +209,10 @@ def stylesheet() -> str:
     return QSS.format(sans=SANS, mono=MONO, **TOKENS)
 
 
-def apply(app: QtWidgets.QApplication) -> None:
-    """Load fonts, set the application stylesheet and the pyqtgraph defaults."""
+def apply(app: QtWidgets.QApplication, theme: str = None) -> None:
+    """Load fonts, set the application stylesheet and the pyqtgraph defaults (optionally switching theme first)."""
+    if theme is not None:
+        set_theme(theme)
     load_fonts()
     f = QtGui.QFont(SANS)
     f.setPointSizeF(9.5)

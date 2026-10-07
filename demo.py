@@ -1,7 +1,8 @@
-"""Fenêtre de démonstration : tous les widgets du kit avec les couleurs des trois rôles.
+"""Fenêtre de démonstration : widgets du kit, rôles de couleur, thèmes Jour et Nuit.
 
-python demo.py            ouvre la fenêtre
-python demo.py out.png    enregistre une capture et quitte (utile hors écran : QT_QPA_PLATFORM=offscreen)
+python demo.py                    ouvre la fenêtre (Jour / Nuit en haut à droite)
+python demo.py light out.png      enregistre une capture du thème choisi (dark ou light) et quitte
+                                  (hors écran : QT_QPA_PLATFORM=offscreen)
 """
 
 import sys
@@ -11,7 +12,7 @@ from PyQt6 import QtCore, QtWidgets
 import ui_kit as ui
 
 
-def build() -> QtWidgets.QWidget:
+def build(on_theme) -> QtWidgets.QWidget:
     root = QtWidgets.QWidget()
     root.setWindowTitle("aedt_ui_kit")
     lay = QtWidgets.QVBoxLayout(root)
@@ -22,20 +23,24 @@ def build() -> QtWidgets.QWidget:
     bar.setObjectName("TopBar")
     h = QtWidgets.QHBoxLayout(bar)
     h.setContentsMargins(12, 8, 12, 8)
-    h.setSpacing(10)
+    h.setSpacing(8)
     h.addWidget(QtWidgets.QPushButton("Ouvrir…"))
     h.addWidget(ui.vsep())
-    h.addWidget(ui.caption("Mesure"))
     seg = ui.Segmented([("a", "Sdd11", ""), ("b", "Scc11", ""), ("c", "Sdd21", "")])
     seg.set_key("a")
     h.addWidget(seg)
     h.addWidget(ui.vsep())
     h.addWidget(ui.caption("tr", upper=False))
-    sp = QtWidgets.QDoubleSpinBox()
+    sp = ui.DecimalSpinBox()  # accepte "." et ","
     sp.setSuffix(" ps")
     sp.setValue(25.0)
+    sp.setFixedWidth(92)
     h.addWidget(sp)
     h.addStretch(1)
+    theme = ui.Segmented([("light", "Jour", "Thème clair"), ("dark", "Nuit", "Thème sombre")])
+    theme.set_key(ui.current_theme())
+    theme.changed.connect(on_theme)
+    h.addWidget(theme)
     primary = QtWidgets.QPushButton("Calculer")
     primary.setProperty("primary", True)
     h.addWidget(primary)
@@ -85,16 +90,33 @@ def build() -> QtWidgets.QWidget:
     return root
 
 
+class Demo:
+    """Rebuilds the window on a theme change: the swatches bake tokens into inline styles."""
+
+    def __init__(self, app: QtWidgets.QApplication):
+        self.app = app
+        self.win = build(self.set_theme)
+
+    def set_theme(self, name: str) -> None:
+        old = self.win
+        ui.apply(self.app, theme=name)
+        self.win = build(self.set_theme)
+        self.win.setGeometry(old.geometry())
+        self.win.show()
+        old.close()
+
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    ui.apply(app)
-    w = build()
-    w.resize(900, 460)
-    w.show()
-    if len(sys.argv) > 1:
+    args = sys.argv[1:]
+    ui.apply(app, theme=args.pop(0) if args and args[0] in ui.THEMES else "dark")
+    demo = Demo(app)
+    demo.win.resize(900, 460)
+    demo.win.show()
+    if args:
         for _ in range(3):
             app.processEvents()
             QtCore.QThread.msleep(100)
-        w.grab().save(sys.argv[1])
+        demo.win.grab().save(args[0])
         sys.exit(0)
     sys.exit(app.exec())

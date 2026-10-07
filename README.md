@@ -2,7 +2,8 @@
 
 Identité visuelle commune des toolkits AEDT (`aedt_tdr`, `aedt_eye`, `aedt_port_checker`) : thème sombre PyQt6, widgets réutilisables, polices IBM Plex embarquées.
 
-![Démonstration](docs/demo.png)
+![Thème Nuit](docs/demo_dark.png)
+![Thème Jour](docs/demo_light.png)
 
 ## Principe
 
@@ -15,6 +16,21 @@ Trois rôles de couleur, jamais mélangés :
 | Statut | `pass`, `warn`, `fail` | verdicts, pastilles, valeurs hors gabarit |
 
 Neutres : gris légèrement bleutés (`bg`, `s1`, `s2`, `line`, `fg`, `dim`). Les valeurs numériques sont en IBM Plex Mono, le texte en IBM Plex Sans.
+
+## Thèmes Jour et Nuit
+
+Deux palettes de mêmes jetons : `ui.DARK` (Nuit, par défaut) et `ui.LIGHT` (Jour). Les couleurs de données sont assombries en thème clair pour garder un contraste suffisant sur fond clair. Seuils vérifiés par les tests : texte et statuts ≥ 4.5:1, traces CH1 à CH4 ≥ 3:1, texte sur bouton principal ≥ 4.5:1.
+
+```python
+ui.apply(app, theme="light")      # au démarrage, ou pour changer de thème en cours d'exécution
+ui.current_theme()                # "dark" | "light"
+```
+
+`ui.TOKENS` est un dictionnaire modifié en place : tout code qui lit `ui.TOKENS[...]` au moment de peindre suit le thème actif. Ce qui a figé une couleur dans une feuille de style locale doit être rafraîchi après un changement :
+
+- `Pill.refresh()` et `KpiTile.refresh()` (appeler `refresh()` sur chaque instance, par exemple via `findChildren`).
+- éléments pyqtgraph : réappliquer fond, axes, plumes et pinceaux depuis `ui.TOKENS` / `ui.color(...)`. Voir `_restyle_plot` dans `aedt_tdr`.
+- préférer les propriétés (`setProperty("role", ...)`) et les noms d'objet aux `setStyleSheet` locaux : ils suivent le thème sans rafraîchissement.
 
 ## Installation
 
@@ -47,6 +63,7 @@ Widgets (`ui_kit/widgets.py`) :
 | `Segmented(items)` | commande segmentée exclusive, signal `changed(key)` |
 | `Pill(verdict)` | pastille PASS / MARGINAL / FAIL / neutre |
 | `KpiStrip(labels)` / `KpiTile` | bandeau d'indicateurs : libellé, grande valeur, sous-ligne |
+| `DecimalSpinBox` | `QDoubleSpinBox` qui accepte « . » et « , » comme séparateur décimal, quelle que soit la locale (affichage avec « . ») |
 | `caption(text)` | petit libellé monospace en capitales (`upper=False` pour εr, tr) |
 | `vsep()` | séparateur vertical d'une barre d'outils |
 
@@ -60,8 +77,8 @@ Dans le code de l'application :
 ## Démonstration
 
 ```bash
-python demo.py                       # fenêtre
-QT_QPA_PLATFORM=offscreen python demo.py docs/demo.png   # capture
+python demo.py                                  # fenêtre, bascule Jour / Nuit en haut à droite
+QT_QPA_PLATFORM=offscreen python demo.py light docs/demo_light.png   # capture (dark ou light)
 ```
 
 ## Conventions d'interface
@@ -74,3 +91,12 @@ QT_QPA_PLATFORM=offscreen python demo.py docs/demo.png   # capture
 ## Licences
 
 Code : usage interne. Polices IBM Plex Sans et IBM Plex Mono : SIL Open Font License 1.1 (`ui_kit/fonts/OFL.txt`).
+
+## Tests
+
+```bash
+python -m pip install pytest
+pytest
+```
+
+Vérifient les séparateurs décimaux, la bascule de thème en place et les contrastes minimaux. Ils sont ignorés si Qt ne peut pas être importé (par exemple libGL absent dans une image CI).

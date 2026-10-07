@@ -56,6 +56,8 @@ class Segmented(QtWidgets.QWidget):
             b.setProperty("first", i == 0)
             b.setProperty("last", i == len(items) - 1)
             b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            # fixed width: a narrow bar must never elide the labels to "..."
+            b.setSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Preferred)
             self._group.addButton(b)
             self._buttons[key] = b
             lay.addWidget(b)
@@ -85,12 +87,18 @@ class Pill(QtWidgets.QLabel):
     def __init__(self, text: str = "—", parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
         self.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.verdict = text
         self.set_state(text)
 
+    def refresh(self) -> None:
+        """Re-read the theme tokens after a theme switch."""
+        self.set_state(self.verdict)
+
     def set_state(self, verdict: str) -> None:
+        self.verdict = verdict
         tok = status_token(verdict)
         fg = TOKENS[tok]
-        bg = "rgba(255,255,255,0.04)" if tok == "dim" else _rgba(fg, 0.14)
+        bg = TOKENS["hover"] if tok == "dim" else _rgba(fg, 0.14)
         self.setText(verdict if verdict and verdict != "N/A" else "—")
         self.setStyleSheet(
             f"color:{fg}; background:{bg}; border-radius:3px; padding:2px 6px;"
@@ -106,6 +114,7 @@ class KpiTile(QtWidgets.QFrame):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(1)
+        self._args = ("—", "", None, False)
         self.lbl = caption(label)
         self.val = QtWidgets.QLabel("—")
         self.sub = QtWidgets.QLabel("")
@@ -118,7 +127,12 @@ class KpiTile(QtWidgets.QFrame):
     def set_label(self, text: str) -> None:
         self.lbl.setText(upper_latin(text))
 
+    def refresh(self) -> None:
+        """Re-read the theme tokens after a theme switch."""
+        self.set(*self._args)
+
     def set(self, value: str, sub: str = "", tone: Optional[str] = None, display: bool = False) -> None:
+        self._args = (value, sub, tone, display)
         self.val.setText(value)
         self.sub.setText(sub)
         col = TOKENS[tone] if tone else TOKENS["fg"]
@@ -132,8 +146,7 @@ class KpiStrip(QtWidgets.QFrame):
 
     def __init__(self, labels: List[str], parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
-        self.setObjectName("Panel")
-        self.setStyleSheet(f"QFrame#Panel {{ border-bottom: 1px solid {TOKENS['line']}; background: {TOKENS['bg']}; }}")
+        self.setObjectName("KpiStrip")
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -144,6 +157,23 @@ class KpiStrip(QtWidgets.QFrame):
             t = KpiTile(lab)
             self.tiles.append(t)
             lay.addWidget(t, 1)
+
+
+class DecimalSpinBox(QtWidgets.QDoubleSpinBox):
+    """QDoubleSpinBox that accepts both "." and "," as decimal separator whatever the system locale.
+
+    Text is always displayed with "."; "," typed or pasted is read as a decimal point (no thousands separator).
+    """
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.setLocale(QtCore.QLocale.c())
+
+    def validate(self, text: str, pos: int):
+        return super().validate(text.replace(",", "."), pos)
+
+    def valueFromText(self, text: str) -> float:
+        return super().valueFromText(text.replace(",", "."))
 
 
 def _rgba(hex_color: str, alpha: float) -> str:
